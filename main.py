@@ -1,16 +1,16 @@
+import tempfile
+import os
+import io
 from fastapi import FastAPI, File, UploadFile
 import pdfplumber
 import re
-from pdf2image import convert_from_path
+from pdf2image import convert_from_bytes, convert_from_path
 import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
-import io
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
-
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,10 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Caminho onde a imagem será salva para visualização
+SAVE_IMAGE_PATH = "./saved_images"
+
+# Cria o diretório para salvar as imagens, caso não exista
+if not os.path.exists(SAVE_IMAGE_PATH):
+    os.makedirs(SAVE_IMAGE_PATH)
 
 @app.post("/processar-pdf/")
 async def processar_pdf(file: UploadFile = File(...)):
-    # Function to extract data from the uploaded PDF
+    # Função para extrair o valor a pagar e o vencimento do PDF
     def extrair_dados_pdf(arquivo_pdf):
         valor_a_pagar = "N/D"
         vencimento_pdf = "N/D"
@@ -31,6 +37,7 @@ async def processar_pdf(file: UploadFile = File(...)):
             with pdfplumber.open(arquivo_pdf) as pdf:
                 for pagina in pdf.pages:
                     texto = pagina.extract_text()
+                    print(f"Texto extraído: {texto}")  # Verifique se está extraindo o texto corretamente
                     if texto:
                         match_valor_a_pagar = re.search(
                             r"(?i)(valor\s*a\s*pagar)[:\s]*R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})", texto)
@@ -43,16 +50,20 @@ async def processar_pdf(file: UploadFile = File(...)):
             print(f"Erro ao extrair dados do PDF: {e}")
         return valor_a_pagar, vencimento_pdf
 
-    # Convert PDF to images
+
+    # Função para converter PDF em imagens
     def converter_pdf_para_imagem(arquivo_pdf):
         try:
-            imagens = convert_from_path(arquivo_pdf, 500)
+            # Convertendo o conteúdo do arquivo PDF para bytes usando getvalue()
+            arquivo_pdf_bytes = arquivo_pdf.getvalue()
+            imagens = convert_from_bytes(arquivo_pdf_bytes, dpi=300)  # Usando os bytes diretamente
             return imagens
         except Exception as e:
             print(f"Erro ao converter PDF para imagem: {e}")
             return []
 
-    # Extract QR code from images
+
+    # Função para extrair QR Code das imagens
     def extrair_qrcode(imagens):
         for img in imagens:
             img_cv = np.array(img)
@@ -63,22 +74,35 @@ async def processar_pdf(file: UploadFile = File(...)):
                 return qr_data
         return None
 
-    # Read the PDF file from the uploaded file
+    # Lendo o arquivo PDF enviado
     pdf_bytes = await file.read()
-
-    # Convert the PDF to a BytesIO object to be processed by pdfplumber and pdf2image
     pdf_io = io.BytesIO(pdf_bytes)
 
-    # Extract data from the PDF
+    # Extraindo dados do PDF
     valor_a_pagar_pdf, vencimento_pdf = extrair_dados_pdf(pdf_io)
 
-    # Convert PDF to images
-    imagens = converter_pdf_para_imagem(pdf_io)
+    # Convertendo PDF para imagens
+    imagens_pdf = converter_pdf_para_imagem(pdf_io)
 
-    # Extract QR code data from images
-    qr_data = extrair_qrcode(imagens)
+    # Salvando a primeira imagem para visualização
+    if imagens_pdf:
+        primeiro_imagem = imagens_pdf[0]
+        print(f"Dimensões da imagem: {primeiro_imagem.size}")  # Imprime as dimensões da imagem
+        if primeiro_imagem.size[0] > 1 and primeiro_imagem.size[1] > 1:
+            primeiro_imagem_path = os.path.join(SAVE_IMAGE_PATH, "primeira_imagem.png")
+            primeiro_imagem.save(primeiro_imagem_path)
+            print(f"Imagem salva em: {primeiro_imagem_path}")
+        else:
+            print("Imagem gerada tem dimensões inválidas.")
 
-    # Return the extracted data as a JSON response
+    # Extraindo QR Code
+    qr_data = extrair_qrcode(imagens_pdf)
+
+    if qr_data:
+        print(f"QR Code encontrado: {qr_data}")
+    else:
+        print("QR Code não encontrado na imagem.")
+
     return {
         "valor_a_pagar": valor_a_pagar_pdf,
         "vencimento": vencimento_pdf,
