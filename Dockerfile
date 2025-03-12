@@ -1,11 +1,12 @@
 FROM python:3.9
 
-# Instalar dependências do sistema necessárias para o OpenCV
+# Instalar dependências do sistema necessárias para o OpenCV e o Poppler
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libglib2.0-dev \
     libgl1 \
-    zbar-tools
+    zbar-tools \
+    poppler-utils  # Instala o Poppler
 
 # Definir o diretório de trabalho
 WORKDIR /app
