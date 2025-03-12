@@ -1,4 +1,4 @@
-import tempfile
+import tempfile 
 import os
 import io
 from fastapi import FastAPI, File, UploadFile
@@ -19,13 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Caminho onde a imagem será salva para visualização
-SAVE_IMAGE_PATH = "./saved_images"
-
-# Cria o diretório para salvar as imagens, caso não exista
-if not os.path.exists(SAVE_IMAGE_PATH):
-    os.makedirs(SAVE_IMAGE_PATH)
 
 @app.post("/processar-pdf/")
 async def processar_pdf(file: UploadFile = File(...)):
@@ -83,17 +76,6 @@ async def processar_pdf(file: UploadFile = File(...)):
 
     # Convertendo PDF para imagens
     imagens_pdf = converter_pdf_para_imagem(pdf_io)
-
-    # Salvando a primeira imagem para visualização
-    if imagens_pdf:
-        primeiro_imagem = imagens_pdf[0]
-        print(f"Dimensões da imagem: {primeiro_imagem.size}")  # Imprime as dimensões da imagem
-        if primeiro_imagem.size[0] > 1 and primeiro_imagem.size[1] > 1:
-            primeiro_imagem_path = os.path.join(SAVE_IMAGE_PATH, "primeira_imagem.png")
-            primeiro_imagem.save(primeiro_imagem_path)
-            print(f"Imagem salva em: {primeiro_imagem_path}")
-        else:
-            print("Imagem gerada tem dimensões inválidas.")
 
     # Extraindo QR Code
     qr_data = extrair_qrcode(imagens_pdf)
