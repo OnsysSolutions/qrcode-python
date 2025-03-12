@@ -1,18 +1,29 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, UploadFile
 import pdfplumber
 import re
 from pdf2image import convert_from_path
 import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
-from PIL import Image
+import io
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-@app.get("/processar-pdf/")
-async def processar_pdf():
-    # Extract PDF data
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.post("/processar-pdf/")
+async def processar_pdf(file: UploadFile = File(...)):
+    # Function to extract data from the uploaded PDF
     def extrair_dados_pdf(arquivo_pdf):
         valor_a_pagar = "N/D"
         vencimento_pdf = "N/D"
@@ -52,10 +63,19 @@ async def processar_pdf():
                 return qr_data
         return None
 
-    # Define the PDF file path
-    arquivo_pdf = './carne_265.pdf'
-    valor_a_pagar_pdf, vencimento_pdf = extrair_dados_pdf(arquivo_pdf)
-    imagens = converter_pdf_para_imagem(arquivo_pdf)
+    # Read the PDF file from the uploaded file
+    pdf_bytes = await file.read()
+
+    # Convert the PDF to a BytesIO object to be processed by pdfplumber and pdf2image
+    pdf_io = io.BytesIO(pdf_bytes)
+
+    # Extract data from the PDF
+    valor_a_pagar_pdf, vencimento_pdf = extrair_dados_pdf(pdf_io)
+
+    # Convert PDF to images
+    imagens = converter_pdf_para_imagem(pdf_io)
+
+    # Extract QR code data from images
     qr_data = extrair_qrcode(imagens)
 
     # Return the extracted data as a JSON response
